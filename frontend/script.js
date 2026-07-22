@@ -141,7 +141,7 @@ async function generate(params) {
     if (params.seed) formData.append("seed", params.seed);
 
 
-    const BACKEND_URL = "http://127.0.0.1:8000";
+    const BACKEND_URL = window.location.origin;
 
     try {
         const requestInfo = `POST ${BACKEND_URL}/generate (form fields: prompt, negative_prompt, style, aspect_ratio${params.seed ? ", seed" : ""})`;
