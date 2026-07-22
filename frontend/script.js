@@ -29,13 +29,7 @@ const els = {
     historyEmpty: document.getElementById('historyEmpty'),
     clearHistory: document.getElementById('clearHistory'),
     toastContainer: document.getElementById('toastContainer'),
-    themeToggle: document.getElementById('themeToggle'),
-    themePanel: document.getElementById('themePanel'),
-    customBg: document.getElementById('customBg'),
 };
-
-const THEME_KEY = 'darkroom_theme';
-const CUSTOM_BG_KEY = 'darkroom_custom_bg';
 
 const state = {
     style: 'none',
@@ -53,7 +47,6 @@ function init() {
     renderHistory();
     updateCharCount();
     updateSizeSlider();
-    initTheme();
 
     els.prompt.addEventListener('input', updateCharCount);
 
@@ -71,29 +64,6 @@ function init() {
         els.prompt.focus();
     });
 
-    els.themeToggle.addEventListener('click', () => {
-        const isOpen = !els.themePanel.hidden;
-        els.themePanel.hidden = isOpen;
-        els.themeToggle.setAttribute('aria-expanded', String(!isOpen));
-    });
-
-    els.themePanel.addEventListener('click', (e) => {
-        const swatch = e.target.closest('.theme-swatch');
-        if (!swatch || !swatch.dataset.theme) return;
-        applyTheme(swatch.dataset.theme);
-    });
-
-    els.customBg.addEventListener('input', (e) => {
-        applyCustomBg(e.target.value);
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.theme-switcher')) {
-            els.themePanel.hidden = true;
-            els.themeToggle.setAttribute('aria-expanded', 'false');
-        }
-    });
-
     els.form.addEventListener('submit', handleSubmit);
     els.downloadBtn.addEventListener('click', handleDownload);
     els.regenerateBtn.addEventListener('click', handleRegenerate);
@@ -105,39 +75,9 @@ function init() {
 // ============================================
 
 function updateCharCount() {
-    const words = els.prompt.value.trim().split(/\s+/).filter(Boolean);
-    const count = els.prompt.value.trim() ? words.length : 0;
-    els.charCount.textContent = count;
-    els.charCount.classList.toggle('near-limit', count > 900);
-}
-
-function initTheme() {
-    const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
-    const savedCustomBg = localStorage.getItem(CUSTOM_BG_KEY);
-    if (savedTheme === 'custom' && savedCustomBg) {
-        els.customBg.value = savedCustomBg;
-        applyCustomBg(savedCustomBg, false);
-    } else {
-        applyTheme(savedTheme, false);
-    }
-}
-
-function applyTheme(theme, persist = true) {
-    document.documentElement.style.background = '';
-    document.documentElement.setAttribute('data-theme', theme);
-    if (persist) localStorage.setItem(THEME_KEY, theme);
-    els.themePanel.hidden = true;
-    els.themeToggle.setAttribute('aria-expanded', 'false');
-}
-
-function applyCustomBg(color, persist = true) {
-    document.documentElement.removeAttribute('data-theme');
-    document.documentElement.style.setProperty('--bg', color);
-    document.body.style.background = color;
-    if (persist) {
-        localStorage.setItem(THEME_KEY, 'custom');
-        localStorage.setItem(CUSTOM_BG_KEY, color);
-    }
+    const len = els.prompt.value.length;
+    els.charCount.textContent = len;
+    els.charCount.classList.toggle('near-limit', len > 450);
 }
 
 function bindChipGroup(row, stateKey) {
@@ -248,7 +188,6 @@ async function runGeneration(payload) {
  * Expected contract: POST prompt/settings, get back an image URL (or base64 data URL).
  */
 async function generateImage(payload) {
-    // If you wire up your own backend at /api/generate, it takes priority automatically.
     try {
         const res = await fetch('/api/generate', {
             method: 'POST',
@@ -260,32 +199,16 @@ async function generateImage(payload) {
         if (!data.image) throw new Error('No image field in response');
         return data.image;
     } catch (err) {
-        // Falls back to Pollinations.ai (free, no API key). nologo=true removes its watermark.
-        return await pollinationsGenerate(payload);
+        // No backend wired up yet — fall back to a placeholder so the UI is demoable.
+        return await demoPlaceholder(payload);
     }
 }
 
-function pollinationsGenerate(payload) {
-    const seed = payload.seed ?? Math.floor(Math.random() * 1_000_000);
-    const stylePrefix = payload.style && payload.style !== 'none' ? `${payload.style.replace('-', ' ')} style, ` : '';
-    const fullPrompt = `${stylePrefix}${payload.prompt}`;
-    const params = new URLSearchParams({
-        width: payload.width,
-        height: payload.height,
-        seed: String(seed),
-        nologo: 'true',
-        model: 'flux',
-    });
-    if (payload.negativePrompt) params.set('negative_prompt', payload.negativePrompt);
-
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?${params.toString()}`;
-
-    // Pollinations generates on request, so we just need to let the image load.
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(url);
-        img.onerror = () => reject(new Error('Image backend failed to respond'));
-        img.src = url;
+function demoPlaceholder(payload) {
+    const seed = payload.seed ?? Math.floor(Math.random() * 100000);
+    const url = `https://picsum.photos/seed/${seed}/${payload.width}/${payload.height}`;
+    return new Promise((resolve) => {
+        setTimeout(() => resolve(url), 1400);
     });
 }
 
