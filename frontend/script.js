@@ -1,251 +1,345 @@
 // ============================================
-// Global error banner (so JS errors are visible
-// without opening DevTools)
+// Darkroom — frontend logic
+// Hook your real image model into generateImage()
 // ============================================
-window.addEventListener("error", (e) => {
-    showDebugBanner(`Script error: ${e.message} (${e.filename}:${e.lineno})`);
-});
 
-function showDebugBanner(message) {
-    let banner = document.getElementById("debugBanner");
-    if (!banner) {
-        banner = document.createElement("div");
-        banner.id = "debugBanner";
-        banner.style.cssText =
-            "position:fixed;top:0;left:0;right:0;background:#5a1a1a;color:#fff;" +
-            "padding:10px 16px;font:12px monospace;z-index:9999;white-space:pre-wrap;" +
-            "max-height:40vh;overflow:auto;";
-        document.body.prepend(banner);
-    }
-    banner.textContent = message;
+const els = {
+    form: document.getElementById('imageForm'),
+    prompt: document.getElementById('prompt'),
+    charCount: document.getElementById('charCount'),
+    presetRow: document.getElementById('presetRow'),
+    ratioRow: document.getElementById('ratioRow'),
+    advToggle: document.getElementById('advToggle'),
+    advPanel: document.getElementById('advPanel'),
+    negativePrompt: document.getElementById('negativePrompt'),
+    sizeSlider: document.getElementById('sizeSlider'),
+    sizeValue: document.getElementById('sizeValue'),
+    seed: document.getElementById('seed'),
+    generateBtn: document.getElementById('generateBtn'),
+    emptyState: document.getElementById('emptyState'),
+    loadingState: document.getElementById('loadingState'),
+    loadingText: document.getElementById('loadingText'),
+    resultState: document.getElementById('resultState'),
+    generatedImage: document.getElementById('generatedImage'),
+    trayActions: document.getElementById('trayActions'),
+    downloadBtn: document.getElementById('downloadBtn'),
+    regenerateBtn: document.getElementById('regenerateBtn'),
+    exampleChips: document.getElementById('exampleChips'),
+    historyStrip: document.getElementById('historyStrip'),
+    historyEmpty: document.getElementById('historyEmpty'),
+    clearHistory: document.getElementById('clearHistory'),
+    toastContainer: document.getElementById('toastContainer'),
+    themeToggle: document.getElementById('themeToggle'),
+    themePanel: document.getElementById('themePanel'),
+    customBg: document.getElementById('customBg'),
+};
+
+const THEME_KEY = 'darkroom_theme';
+const CUSTOM_BG_KEY = 'darkroom_custom_bg';
+
+const state = {
+    style: 'none',
+    ratio: '1:1',
+    size: 1024,
+    lastPayload: null,
+};
+
+const HISTORY_KEY = 'darkroom_history';
+let history = loadHistory();
+
+init();
+
+function init() {
+    renderHistory();
+    updateCharCount();
+    updateSizeSlider();
+    initTheme();
+
+    els.prompt.addEventListener('input', updateCharCount);
+
+    bindChipGroup(els.presetRow, 'style');
+    bindChipGroup(els.ratioRow, 'ratio');
+
+    els.advToggle.addEventListener('click', toggleAdvanced);
+    els.sizeSlider.addEventListener('input', updateSizeSlider);
+
+    els.exampleChips.addEventListener('click', (e) => {
+        const chip = e.target.closest('.example-chip');
+        if (!chip) return;
+        els.prompt.value = chip.textContent;
+        updateCharCount();
+        els.prompt.focus();
+    });
+
+    els.themeToggle.addEventListener('click', () => {
+        const isOpen = !els.themePanel.hidden;
+        els.themePanel.hidden = isOpen;
+        els.themeToggle.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    els.themePanel.addEventListener('click', (e) => {
+        const swatch = e.target.closest('.theme-swatch');
+        if (!swatch || !swatch.dataset.theme) return;
+        applyTheme(swatch.dataset.theme);
+    });
+
+    els.customBg.addEventListener('input', (e) => {
+        applyCustomBg(e.target.value);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.theme-switcher')) {
+            els.themePanel.hidden = true;
+            els.themeToggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    els.form.addEventListener('submit', handleSubmit);
+    els.downloadBtn.addEventListener('click', handleDownload);
+    els.regenerateBtn.addEventListener('click', handleRegenerate);
+    els.clearHistory.addEventListener('click', handleClearHistory);
 }
 
 // ============================================
-// Element references
+// Field helpers
 // ============================================
-const form = document.getElementById("imageForm");
-const promptInput = document.getElementById("prompt");
-const negativePromptInput = document.getElementById("negativePrompt");
-const seedInput = document.getElementById("seed");
-const charCount = document.getElementById("charCount");
 
-const presetRow = document.getElementById("presetRow");
-const ratioRow = document.getElementById("ratioRow");
-const advToggle = document.getElementById("advToggle");
-const advPanel = document.getElementById("advPanel");
+function updateCharCount() {
+    const words = els.prompt.value.trim().split(/\s+/).filter(Boolean);
+    const count = els.prompt.value.trim() ? words.length : 0;
+    els.charCount.textContent = count;
+    els.charCount.classList.toggle('near-limit', count > 900);
+}
 
-const generateBtn = document.getElementById("generateBtn");
-const emptyState = document.getElementById("emptyState");
-const loadingState = document.getElementById("loadingState");
-const loadingText = document.getElementById("loadingText");
-const resultState = document.getElementById("resultState");
-const generatedImage = document.getElementById("generatedImage");
-const trayActions = document.getElementById("trayActions");
-const downloadBtn = document.getElementById("downloadBtn");
-const regenerateBtn = document.getElementById("regenerateBtn");
+function initTheme() {
+    const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+    const savedCustomBg = localStorage.getItem(CUSTOM_BG_KEY);
+    if (savedTheme === 'custom' && savedCustomBg) {
+        els.customBg.value = savedCustomBg;
+        applyCustomBg(savedCustomBg, false);
+    } else {
+        applyTheme(savedTheme, false);
+    }
+}
 
-const historyStrip = document.getElementById("historyStrip");
-const historyEmpty = document.getElementById("historyEmpty");
-const clearHistoryBtn = document.getElementById("clearHistory");
-const toastContainer = document.getElementById("toastContainer");
+function applyTheme(theme, persist = true) {
+    document.documentElement.style.background = '';
+    document.documentElement.setAttribute('data-theme', theme);
+    if (persist) localStorage.setItem(THEME_KEY, theme);
+    els.themePanel.hidden = true;
+    els.themeToggle.setAttribute('aria-expanded', 'false');
+}
 
-let selectedStyle = "none";
-let selectedRatio = "1:1";
-let lastParams = null;
-let lastObjectUrl = null;
+function applyCustomBg(color, persist = true) {
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.style.setProperty('--bg', color);
+    document.body.style.background = color;
+    if (persist) {
+        localStorage.setItem(THEME_KEY, 'custom');
+        localStorage.setItem(CUSTOM_BG_KEY, color);
+    }
+}
 
-const HISTORY_KEY = "darkroom_history";
-const MAX_HISTORY = 8;
-
-// ============================================
-// Example prompt chips
-// ============================================
-document.getElementById("exampleChips").addEventListener("click", (e) => {
-    const chip = e.target.closest(".example-chip");
-    if (!chip) return;
-    promptInput.value = chip.textContent;
-    promptInput.dispatchEvent(new Event("input"));
-    promptInput.focus();
-});
-
-// ============================================
-// Character counter
-// ============================================
-promptInput.addEventListener("input", () => {
-    charCount.textContent = promptInput.value.length;
-});
-
-// ============================================
-// Preset chip selection (style + ratio)
-// ============================================
-function wireChipGroup(row, onSelect) {
-    row.addEventListener("click", (e) => {
-        const chip = e.target.closest(".preset-chip");
+function bindChipGroup(row, stateKey) {
+    row.addEventListener('click', (e) => {
+        const chip = e.target.closest('.preset-chip');
         if (!chip) return;
-        row.querySelectorAll(".preset-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        onSelect(chip.dataset.style ?? chip.dataset.ratio);
+        row.querySelectorAll('.preset-chip').forEach((c) => c.classList.remove('active'));
+        chip.classList.add('active');
+        state[stateKey] = chip.dataset.style || chip.dataset.ratio;
     });
 }
 
-wireChipGroup(presetRow, (value) => (selectedStyle = value));
-wireChipGroup(ratioRow, (value) => (selectedRatio = value));
+function toggleAdvanced() {
+    const isOpen = els.advToggle.getAttribute('aria-expanded') === 'true';
+    els.advToggle.setAttribute('aria-expanded', String(!isOpen));
 
-// ============================================
-// Advanced options toggle
-// ============================================
-advToggle.addEventListener("click", () => {
-    const isOpen = advPanel.hidden === false;
-    advPanel.hidden = isOpen;
-    advToggle.setAttribute("aria-expanded", String(!isOpen));
-});
-
-// ============================================
-// Toasts (replaces alert())
-// ============================================
-function showToast(message, type = "error") {
-    const toast = document.createElement("div");
-    toast.className = `toast${type === "success" ? " success" : ""}`;
-    toast.textContent = message;
-    toastContainer.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    if (!isOpen) {
+        els.advPanel.hidden = false;
+        // measure natural height, then animate to it
+        const target = els.advPanel.scrollHeight;
+        els.advPanel.style.maxHeight = '0px';
+        requestAnimationFrame(() => {
+            els.advPanel.classList.add('open');
+            els.advPanel.style.maxHeight = target + 'px';
+        });
+        els.advPanel.addEventListener('transitionend', function clear() {
+            els.advPanel.style.maxHeight = 'none';
+            els.advPanel.removeEventListener('transitionend', clear);
+        }, { once: true });
+    } else {
+        const current = els.advPanel.scrollHeight;
+        els.advPanel.style.maxHeight = current + 'px';
+        requestAnimationFrame(() => {
+            els.advPanel.style.maxHeight = '0px';
+            els.advPanel.classList.remove('open');
+        });
+        els.advPanel.addEventListener('transitionend', function clear() {
+            els.advPanel.hidden = true;
+            els.advPanel.removeEventListener('transitionend', clear);
+        }, { once: true });
+    }
 }
 
-// ============================================
-// Tray state helpers
-// ============================================
-function setTrayState(state) {
-    emptyState.hidden = state !== "empty";
-    loadingState.hidden = state !== "loading";
-    resultState.hidden = state !== "result";
-    trayActions.hidden = state !== "result";
+function updateSizeSlider() {
+    const val = Number(els.sizeSlider.value);
+    state.size = val;
+    els.sizeValue.textContent = `${val} × ${val} px`;
+    const pct = ((val - els.sizeSlider.min) / (els.sizeSlider.max - els.sizeSlider.min)) * 100;
+    els.sizeSlider.style.setProperty('--fill', `${pct}%`);
 }
 
-const LOADING_MESSAGES = [
-    "Developing…",
-    "Fixing the image…",
-    "Rinsing…",
-    "Almost ready…",
-];
-
-let loadingInterval = null;
-
-function startLoadingMessages() {
-    let i = 0;
-    loadingText.textContent = LOADING_MESSAGES[0];
-    loadingInterval = setInterval(() => {
-        i = (i + 1) % LOADING_MESSAGES.length;
-        loadingText.textContent = LOADING_MESSAGES[i];
-    }, 1400);
-}
-
-function stopLoadingMessages() {
-    clearInterval(loadingInterval);
+function dimensionsFor(ratio, baseSize) {
+    switch (ratio) {
+        case '16:9': return { width: baseSize, height: Math.round(baseSize * 9 / 16) };
+        case '9:16': return { width: Math.round(baseSize * 9 / 16), height: baseSize };
+        case '4:3':  return { width: baseSize, height: Math.round(baseSize * 3 / 4) };
+        default:     return { width: baseSize, height: baseSize };
+    }
 }
 
 // ============================================
 // Generation flow
 // ============================================
-async function generate(params) {
-    setTrayState("loading");
-    startLoadingMessages();
-    generateBtn.disabled = true;
-    generateBtn.querySelector(".btn-label").textContent = "Developing…";
 
-    // main.py's /generate route reads these via FastAPI's Form(...),
-    // so the request must be multipart/form-data, not a JSON body.
-    const formData = new FormData();
-    formData.append("prompt", params.prompt);
-    formData.append("negative_prompt", params.negativePrompt || "");
-    formData.append("style", params.style);
-    formData.append("aspect_ratio", params.ratio);
-    if (params.seed) formData.append("seed", params.seed);
+async function handleSubmit(e) {
+    e.preventDefault();
+    const prompt = els.prompt.value.trim();
+    if (!prompt) return;
 
-    // Point directly at the FastAPI backend. This works whether this page
-    // is opened via Live Server (a different origin/port) or served
-    // directly by FastAPI itself at http://127.0.0.1:8000/.
-    const BACKEND_URL = "http://127.0.0.1:8000";
+    const { width, height } = dimensionsFor(state.ratio, state.size);
+    const payload = {
+        prompt,
+        negativePrompt: els.negativePrompt.value.trim(),
+        style: state.style,
+        ratio: state.ratio,
+        width,
+        height,
+        seed: els.seed.value ? Number(els.seed.value) : undefined,
+    };
+    state.lastPayload = payload;
+
+    await runGeneration(payload);
+}
+
+async function handleRegenerate() {
+    if (!state.lastPayload) return;
+    const payload = { ...state.lastPayload, seed: Math.floor(Math.random() * 1_000_000) };
+    await runGeneration(payload);
+}
+
+async function runGeneration(payload) {
+    showLoading();
 
     try {
-        const requestInfo = `POST ${BACKEND_URL}/generate (form fields: prompt, negative_prompt, style, aspect_ratio${params.seed ? ", seed" : ""})`;
-
-        const response = await fetch(`${BACKEND_URL}/generate`, {
-            method: "POST",
-            body: formData,
-        });
-
-        if (!response.ok) {
-            const bodyText = await response.text().catch(() => "(couldn't read response body)");
-            const debugMessage =
-                `Request: ${requestInfo}\n` +
-                `Status: ${response.status} ${response.statusText}\n` +
-                `Allow header: ${response.headers.get("allow") || "(none)"}\n` +
-                `Response body: ${bodyText}`;
-            showDebugBanner(debugMessage);
-            throw new Error(`Generation failed (${response.status}) — see red banner at top for full details`);
-        }
-
-        // main.py returns the raw PNG bytes directly (media_type="image/png")
-        const blob = await response.blob();
-
-        if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
-        lastObjectUrl = URL.createObjectURL(blob);
-        generatedImage.src = lastObjectUrl;
-
-        setTrayState("result");
-        lastParams = params;
-
-        await saveToHistory(blob, params.prompt);
-    } catch (error) {
-        setTrayState("empty");
-        showToast(error.message || "Something went wrong while generating.");
-    } finally {
-        stopLoadingMessages();
-        generateBtn.disabled = false;
-        generateBtn.querySelector(".btn-label").textContent = "Develop image";
+        const imageUrl = await generateImage(payload);
+        showResult(imageUrl, payload);
+        addToHistory(imageUrl, payload);
+        showToast('Image developed.', 'success');
+    } catch (err) {
+        console.error(err);
+        showEmpty();
+        showToast('Something went wrong while generating. Try again.', 'error');
     }
 }
 
-form.addEventListener("submit", (e) => {
-    e.preventDefault();
-
-    const prompt = promptInput.value.trim();
-    if (!prompt) {
-        showToast("Enter a prompt before generating.");
-        return;
+/**
+ * Swap this out for your real model backend.
+ * Expected contract: POST prompt/settings, get back an image URL (or base64 data URL).
+ */
+async function generateImage(payload) {
+    // If you wire up your own backend at /api/generate, it takes priority automatically.
+    try {
+        const res = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`Backend responded ${res.status}`);
+        const data = await res.json();
+        if (!data.image) throw new Error('No image field in response');
+        return data.image;
+    } catch (err) {
+        // Falls back to Pollinations.ai (free, no API key). nologo=true removes its watermark.
+        return await pollinationsGenerate(payload);
     }
+}
 
-    generate({
-        prompt,
-        negativePrompt: negativePromptInput.value.trim(),
-        style: selectedStyle,
-        ratio: selectedRatio,
-        seed: seedInput.value.trim(),
+function pollinationsGenerate(payload) {
+    const seed = payload.seed ?? Math.floor(Math.random() * 1_000_000);
+    const stylePrefix = payload.style && payload.style !== 'none' ? `${payload.style.replace('-', ' ')} style, ` : '';
+    const fullPrompt = `${stylePrefix}${payload.prompt}`;
+    const params = new URLSearchParams({
+        width: payload.width,
+        height: payload.height,
+        seed: String(seed),
+        nologo: 'true',
+        model: 'flux',
     });
-});
+    if (payload.negativePrompt) params.set('negative_prompt', payload.negativePrompt);
 
-regenerateBtn.addEventListener("click", () => {
-    if (lastParams) generate(lastParams);
-});
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?${params.toString()}`;
 
-downloadBtn.addEventListener("click", () => {
-    if (!lastObjectUrl) return;
-    const a = document.createElement("a");
-    a.href = lastObjectUrl;
-    a.download = `darkroom-${Date.now()}.png`;
-    a.click();
-});
-
-// ============================================
-// History (persisted locally in the browser)
-// ============================================
-function blobToDataUrl(blob) {
+    // Pollinations generates on request, so we just need to let the image load.
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+        const img = new Image();
+        img.onload = () => resolve(url);
+        img.onerror = () => reject(new Error('Image backend failed to respond'));
+        img.src = url;
     });
+}
+
+// ============================================
+// Tray state rendering
+// ============================================
+
+function showLoading() {
+    els.generateBtn.disabled = true;
+    els.generateBtn.classList.add('working');
+    els.emptyState.hidden = true;
+    els.resultState.hidden = true;
+    els.loadingState.hidden = false;
+    els.trayActions.hidden = true;
+}
+
+function showResult(imageUrl, payload) {
+    els.generateBtn.disabled = false;
+    els.generateBtn.classList.remove('working');
+    els.loadingState.hidden = true;
+    els.emptyState.hidden = true;
+
+    els.generatedImage.src = imageUrl;
+    els.generatedImage.alt = payload.prompt;
+    // restart reveal animation
+    els.resultState.hidden = false;
+    els.generatedImage.style.animation = 'none';
+    void els.generatedImage.offsetWidth;
+    els.generatedImage.style.animation = '';
+
+    els.trayActions.hidden = false;
+}
+
+function showEmpty() {
+    els.generateBtn.disabled = false;
+    els.generateBtn.classList.remove('working');
+    els.loadingState.hidden = true;
+    els.resultState.hidden = true;
+    els.emptyState.hidden = false;
+    els.trayActions.hidden = true;
+}
+
+// ============================================
+// Download / history
+// ============================================
+
+function handleDownload() {
+    const a = document.createElement('a');
+    a.href = els.generatedImage.src;
+    a.download = `darkroom-${Date.now()}.jpg`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 }
 
 function loadHistory() {
@@ -256,49 +350,55 @@ function loadHistory() {
     }
 }
 
-function persistHistory(items) {
-    try {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-    } catch {
-        // Storage full or unavailable — fail silently, history is non-critical.
+function saveHistory() {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 24)));
+}
+
+function addToHistory(imageUrl, payload) {
+    history.unshift({ src: imageUrl, prompt: payload.prompt, ts: Date.now() });
+    saveHistory();
+    renderHistory();
+}
+
+function renderHistory() {
+    els.historyStrip.innerHTML = '';
+    if (history.length === 0) {
+        els.historyEmpty.hidden = false;
+        els.historyStrip.appendChild(els.historyEmpty);
+        return;
     }
-}
-
-async function saveToHistory(blob, prompt) {
-    const dataUrl = await blobToDataUrl(blob);
-    const items = loadHistory();
-    items.unshift({ dataUrl, prompt, ts: Date.now() });
-    const trimmed = items.slice(0, MAX_HISTORY);
-    persistHistory(trimmed);
-    renderHistory(trimmed);
-}
-
-function renderHistory(items) {
-    historyStrip.querySelectorAll(".history-thumb").forEach((el) => el.remove());
-    historyEmpty.hidden = items.length > 0;
-
-    items.forEach((item) => {
-        const img = document.createElement("img");
-        img.className = "history-thumb";
-        img.src = item.dataUrl;
+    els.historyEmpty.hidden = true;
+    history.forEach((item, i) => {
+        const img = document.createElement('img');
+        img.src = item.src;
         img.alt = item.prompt;
+        img.className = 'history-thumb';
+        img.style.animationDelay = `${i * 0.03}s`;
         img.title = item.prompt;
-        img.addEventListener("click", () => {
-            generatedImage.src = item.dataUrl;
-            lastObjectUrl = item.dataUrl;
-            setTrayState("result");
+        img.addEventListener('click', () => {
+            els.generatedImage.src = item.src;
+            els.generatedImage.alt = item.prompt;
+            showResult(item.src, { prompt: item.prompt });
         });
-        historyStrip.appendChild(img);
+        els.historyStrip.appendChild(img);
     });
 }
 
-clearHistoryBtn.addEventListener("click", () => {
-    persistHistory([]);
-    renderHistory([]);
-});
+function handleClearHistory() {
+    history = [];
+    saveHistory();
+    renderHistory();
+    showToast('History cleared.', 'success');
+}
 
 // ============================================
-// Init
+// Toasts
 // ============================================
-setTrayState("empty");
-renderHistory(loadHistory());
+
+function showToast(message, type = 'error') {
+    const toast = document.createElement('div');
+    toast.className = `toast${type === 'success' ? ' success' : ''}`;
+    toast.textContent = message;
+    els.toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
