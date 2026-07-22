@@ -188,6 +188,12 @@ Preview + Download
 
 ---
 
+# Deploy on render
+
+https://ai-image-generator-dg25.onrender.com
+
+---
+
 # 🌟 Highlights
 
 - Elegant Darkroom-inspired UI
