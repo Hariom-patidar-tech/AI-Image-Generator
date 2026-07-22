@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darkroom — AI Image Generator</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/frontend/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                    <circle cx="12" cy="12" r="3.2" fill="currentColor"/>
+                </svg>
+            </span>
+            <span class="brand-name">Darkroom</span>
+        </div>
+        <p class="brand-tagline">Prompt in. Image develops.</p>
+    </header>
+
+    
+    <main class="layout">
+
+        
+        <section class="panel controls" aria-label="Generation controls">
+
+            <form id="imageForm">
+
+                <label class="field-label" for="prompt">Prompt</label>
+                <textarea
+                    id="prompt"
+                    class="prompt-input"
+                    placeholder="A lighthouse at dusk, storm rolling in, cinematic lighting…"
+                    maxlength="500"
+                    required
+                    rows="4"
+                ></textarea>
+                <div class="char-count"><span id="charCount">0</span>/500</div>
+
+                
+                <div class="field-label">Style</div>
+                <div class="preset-row" id="presetRow" role="group" aria-label="Style preset">
+                    <button type="button" class="preset-chip active" data-style="none">None</button>
+                    <button type="button" class="preset-chip" data-style="photorealistic">Photoreal</button>
+                    <button type="button" class="preset-chip" data-style="anime">Anime</button>
+                    <button type="button" class="preset-chip" data-style="digital-art">Digital Art</button>
+                    <button type="button" class="preset-chip" data-style="oil-painting">Oil Painting</button>
+                    <button type="button" class="preset-chip" data-style="sketch">Sketch</button>
+                </div>
+
+                
+                <button type="button" id="advToggle" class="adv-toggle" aria-expanded="false">
+                    <span>Advanced options</span>
+                    <svg class="chev" viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+
+                <div id="advPanel" class="adv-panel" hidden>
+
+                    <label class="field-label" for="negativePrompt">Negative prompt</label>
+                    <input
+                        type="text"
+                        id="negativePrompt"
+                        class="text-input"
+                        placeholder="blurry, watermark, extra fingers…"
+                    >
+
+                    <label class="field-label">Aspect ratio</label>
+                    <div class="preset-row" id="ratioRow" role="group" aria-label="Aspect ratio">
+                        <button type="button" class="preset-chip active" data-ratio="1:1">1:1</button>
+                        <button type="button" class="preset-chip" data-ratio="16:9">16:9</button>
+                        <button type="button" class="preset-chip" data-ratio="9:16">9:16</button>
+                        <button type="button" class="preset-chip" data-ratio="4:3">4:3</button>
+                    </div>
+
+                    <label class="field-label" for="seed">Seed <span class="field-hint">(optional, for reproducible results)</span></label>
+                    <input type="number" id="seed" class="text-input" placeholder="Random">
+                </div>
+
+                <button type="submit" id="generateBtn" class="generate-btn">
+                    <span class="btn-label">Develop image</span>
+                </button>
+
+            </form>
+
+        </section>
+
+        
+        <section class="panel tray" aria-label="Image preview">
+
+            <div class="tray-surface" id="traySurface">
+
+                
+                <div class="state empty-state" id="emptyState">
+                    <svg viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">
+                        <rect x="6" y="10" width="36" height="28" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="17" cy="21" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M6 32l10-9 8 7 6-5 12 10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <p>Your image will develop here</p>
+                    <div class="example-chips" id="exampleChips">
+                        <button type="button" class="example-chip">Neon-lit Tokyo alley at midnight, rain</button>
+                        <button type="button" class="example-chip">Cozy cabin in snowy mountains, warm light</button>
+                        <button type="button" class="example-chip">Portrait of an old sailor, weathered face</button>
+                    </div>
+                </div>
+
+                
+                <div class="state loading-state" id="loadingState" hidden>
+                    <div class="developing-frame">
+                        <div class="grain"></div>
+                    </div>
+                    <p id="loadingText">Developing…</p>
+                </div>
+
+                
+                <div class="state result-state" id="resultState" hidden>
+                    <img id="generatedImage" alt="Generated image">
+                </div>
+
+            </div>
+
+            <div class="tray-actions" id="trayActions" hidden>
+                <button type="button" id="downloadBtn" class="tray-btn">Download</button>
+                <button type="button" id="regenerateBtn" class="tray-btn">Regenerate</button>
+            </div>
+
+        </section>
+
+    </main>
+
+    <section class="history" aria-label="Recent generations">
+        <div class="history-head">
+            <h2>Recent</h2>
+            <button type="button" id="clearHistory" class="clear-btn">Clear</button>
+        </div>
+        <div class="history-strip" id="historyStrip">
+            <p class="history-empty" id="historyEmpty">Nothing developed yet.</p>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <p>Darkroom &middot; images are generated by your own model backend, nothing is stored on a server.</p>
+    </footer>
+
+</div>
+
+
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+<script src="/frontend/script.js"></script>
+</body>
+</html>
