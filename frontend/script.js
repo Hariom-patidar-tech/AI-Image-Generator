@@ -30,7 +30,7 @@ const advPanel = document.getElementById("advPanel");
 
 const generateBtn = document.getElementById("generateBtn");
 const emptyState = document.getElementById("emptyState");
-const loadingState = document.getElementById("loadingState");
+// const loadingState = document.getElementById("loadingState");
 const loadingText = document.getElementById("loadingText");
 const resultState = document.getElementById("resultState");
 const generatedImage = document.getElementById("generatedImage");
@@ -48,17 +48,17 @@ let selectedRatio = "1:1";
 let lastParams = null;
 let lastObjectUrl = null;
 
-const HISTORY_KEY = "darkroom_history";
+const HISTORY_KEY = "PixelFusion.AI_history";
 const MAX_HISTORY = 8;
 
 
-document.getElementById("exampleChips").addEventListener("click", (e) => {
-    const chip = e.target.closest(".example-chip");
-    if (!chip) return;
-    promptInput.value = chip.textContent;
-    promptInput.dispatchEvent(new Event("input"));
-    promptInput.focus();
-});
+// document.getElementById("exampleChips").addEventListener("click", (e) => {
+//     const chip = e.target.closest(".example-chip");
+//     if (!chip) return;
+//     promptInput.value = chip.textContent;
+//     promptInput.dispatchEvent(new Event("input"));
+//     promptInput.focus();
+// });
 
 
 promptInput.addEventListener("input", () => {
@@ -95,7 +95,7 @@ function showToast(message, type = "error") {
     setTimeout(() => toast.remove(), 4000);
 }
 
-
+const loadingState = document.getElementById("loadingState");
 function setTrayState(state) {
     emptyState.hidden = state !== "empty";
     loadingState.hidden = state !== "loading";
@@ -103,32 +103,32 @@ function setTrayState(state) {
     trayActions.hidden = state !== "result";
 }
 
-const LOADING_MESSAGES = [
-    "Developing…",
-    "Fixing the image…",
-    "Rinsing…",
-    "Almost ready…",
-];
+// const LOADING_MESSAGES = [
+//     "Developing…",
+//     "Fixing the image…",
+//     "Rinsing…",
+//     "Almost ready…",
+// ];
 
-let loadingInterval = null;
+// let loadingInterval = null;
 
-function startLoadingMessages() {
-    let i = 0;
-    loadingText.textContent = LOADING_MESSAGES[0];
-    loadingInterval = setInterval(() => {
-        i = (i + 1) % LOADING_MESSAGES.length;
-        loadingText.textContent = LOADING_MESSAGES[i];
-    }, 1400);
-}
+// function startLoadingMessages() {
+//     let i = 0;
+//     loadingText.textContent = LOADING_MESSAGES[0];
+//     loadingInterval = setInterval(() => {
+//         i = (i + 1) % LOADING_MESSAGES.length;
+//         loadingText.textContent = LOADING_MESSAGES[i];
+//     }, 1400);
+// }
 
-function stopLoadingMessages() {
-    clearInterval(loadingInterval);
-}
+// function stopLoadingMessages() {
+//     clearInterval(loadingInterval);
+// }
 
 
 async function generate(params) {
     setTrayState("loading");
-    startLoadingMessages();
+    // startLoadingMessages();
     generateBtn.disabled = true;
     generateBtn.querySelector(".btn-label").textContent = "Developing…";
 
@@ -181,7 +181,7 @@ async function generate(params) {
         setTrayState("empty");
         showToast(error.message || "Something went wrong while generating.");
     } finally {
-        stopLoadingMessages();
+        // stopLoadingMessages();
         generateBtn.disabled = false;
         generateBtn.querySelector(".btn-label").textContent = "Develop image";
     }
@@ -213,7 +213,7 @@ downloadBtn.addEventListener("click", () => {
     if (!lastObjectUrl) return;
     const a = document.createElement("a");
     a.href = lastObjectUrl;
-    a.download = `darkroom-${Date.now()}.png`;
+    a.download = `PixelFusion.AI-${Date.now()}.png`;
     a.click();
 });
 

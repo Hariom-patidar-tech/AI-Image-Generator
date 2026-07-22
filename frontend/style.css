@@ -450,7 +450,7 @@ button {
 /* ============================================
    Loading / developing state
    ============================================ */
-.developing-frame {
+/* .developing-frame {
     width: 170px;
     height: 170px;
     border-radius: 6px;
@@ -468,7 +468,7 @@ button {
         radial-gradient(circle at 20% 30%, rgba(232,163,61,0.18) 0%, transparent 40%),
         radial-gradient(circle at 75% 65%, rgba(232,163,61,0.10) 0%, transparent 45%);
     animation: grain-shift 1.6s steps(6) infinite;
-}
+} */
 
 .progress-track {
     width: 170px;
@@ -492,7 +492,7 @@ button {
     100% { transform: translateX(330%); }
 }
 
-@keyframes safelight-pulse {
+/* @keyframes safelight-pulse {
     0%, 100% { box-shadow: 0 0 0 1px var(--border-soft), 0 0 30px var(--amber-soft); }
     50% { box-shadow: 0 0 0 1px var(--border-soft), 0 0 55px var(--amber-dim); }
 }
@@ -501,7 +501,18 @@ button {
     0% { transform: translate(0, 0); opacity: 0.6; }
     50% { transform: translate(3px, -2px); opacity: 1; }
     100% { transform: translate(0, 0); opacity: 0.6; }
+} */
+
+
+.empty-state{
+    display:none !important;
 }
+
+#generatedImage:not([src]),
+#generatedImage[src=""]{
+    display:none;
+}
+
 
 .loading-state p {
     font-family: var(--font-mono);
